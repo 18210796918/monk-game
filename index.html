@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>做一天和尚撞一天钟</title>
+<meta name="description" content="钟声一响，黄金万两。佛系打工人模拟器：敲钟、敲木鱼、种菜，功德随缘。">
+<meta property="og:title" content="做一天和尚撞一天钟">
+<meta property="og:description" content="你今日撞钟了吗？佛系打工人模拟器">
+<meta property="og:image" content="img/cover-bell.jpg">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none; }
+  html, body { height:100%; overflow:hidden; font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; background:#1a1a2e; }
+
+  #app { position:relative; width:100%; height:100%; max-width:520px; margin:0 auto; overflow:hidden; }
+
+  /* 背景：当前时段场景，模糊压暗 */
+  #bg { position:absolute; inset:0; background-size:cover; background-position:center; filter:blur(18px) brightness(.45) saturate(.9); transform:scale(1.15); transition:background-image 1s; }
+
+  /* 顶部状态栏 */
+  #topbar { position:absolute; top:0; left:0; right:0; z-index:20; padding:14px 16px 10px; display:flex; align-items:center; justify-content:space-between; background:linear-gradient(rgba(0,0,0,.5),transparent); }
+  #title { font-size:15px; color:#e8d9b0; letter-spacing:2px; font-weight:600; text-shadow:0 1px 4px rgba(0,0,0,.6); }
+  #title small { display:block; font-size:10px; color:#b8a888; font-weight:400; letter-spacing:1px; margin-top:2px; }
+  #stats { display:flex; gap:10px; }
+  .stat { text-align:right; }
+  .stat .num { font-size:16px; font-weight:700; color:#f0e2c0; text-shadow:0 1px 3px rgba(0,0,0,.6); }
+  .stat .lbl { font-size:10px; color:#a89878; }
+
+  /* 中央玩法区 */
+  #stage { position:absolute; inset:64px 0 92px; display:flex; align-items:center; justify-content:center; z-index:10; }
+  #sceneCard { position:relative; width:92%; border-radius:18px; overflow:hidden; box-shadow:0 12px 44px rgba(0,0,0,.55); transition:transform .1s; }
+  #sceneImg { width:100%; display:block; pointer-events:none; }
+  #hitArea { position:absolute; cursor:pointer; }
+  #hitArea:active { filter:brightness(1.12); }
+
+  /* 钟摆动效 */
+  .swing { animation:swing .55s ease-out; transform-origin:50% 0; }
+  @keyframes swing { 0%{transform:rotate(0)} 18%{transform:rotate(5deg)} 45%{transform:rotate(-3.4deg)} 70%{transform:rotate(1.6deg)} 100%{transform:rotate(0)} }
+
+  /* 木鱼缩放 */
+  .thump { animation:thump .18s ease-out; }
+  @keyframes thump { 0%{transform:scale(1)} 40%{transform:scale(.94)} 100%{transform:scale(1)} }
+
+  /* 飘字 */
+  .float { position:absolute; z-index:30; font-size:14px; font-weight:700; color:#ffe9a8; text-shadow:0 1px 4px rgba(0,0,0,.7); pointer-events:none; animation:floatUp 1.4s ease-out forwards; white-space:nowrap; }
+  @keyframes floatUp { 0%{opacity:0; transform:translateY(6px) scale(.8)} 15%{opacity:1; transform:translateY(0) scale(1.1)} 100%{opacity:0; transform:translateY(-64px) scale(.95)} }
+
+  /* 波环 */
+  .ripple { position:absolute; border:2px solid rgba(255,225,150,.55); border-radius:50%; pointer-events:none; animation:rip .7s ease-out forwards; }
+  @keyframes rip { 0%{opacity:.9; transform:scale(.2)} 100%{opacity:0; transform:scale(1.6)} }
+
+  /* 文案条 */
+  #quote { position:absolute; left:0; right:0; bottom:96px; z-index:15; text-align:center; padding:0 28px; pointer-events:none; }
+  #quoteText { display:inline-block; font-size:13px; color:#d8c8a0; background:rgba(20,16,8,.62); padding:7px 16px; border-radius:99px; border:1px solid rgba(216,200,160,.18); backdrop-filter:blur(6px); opacity:0; transition:opacity .35s; max-width:100%; }
+  #quoteText.show { opacity:1; }
+
+  /* 菜园操作条 */
+  #gardenBar { position:absolute; left:0; right:0; bottom:96px; z-index:15; display:none; justify-content:center; gap:12px; }
+  .gbtn { font-size:13px; padding:8px 20px; border-radius:99px; border:1px solid rgba(216,200,160,.35); background:rgba(20,16,8,.68); color:#e0d0a8; cursor:pointer; backdrop-filter:blur(6px); }
+  .gbtn:active { transform:scale(.95); }
+  .gbtn[disabled] { opacity:.4; }
+
+  /* 底部导航 */
+  #nav { position:absolute; left:0; right:0; bottom:0; z-index:20; display:flex; background:rgba(12,10,6,.88); backdrop-filter:blur(12px); border-top:1px solid rgba(216,200,160,.14); padding:8px 8px calc(8px + env(safe-area-inset-bottom)); }
+  .navbtn { flex:1; text-align:center; padding:7px 0 5px; cursor:pointer; border-radius:12px; color:#98876a; transition:color .2s; }
+  .navbtn .ico { font-size:21px; line-height:1; }
+  .navbtn .txt { font-size:11px; margin-top:4px; letter-spacing:1px; }
+  .navbtn.on { color:#f0dfae; }
+  .navbtn.on .ico { transform:translateY(-1px); }
+  .navbtn:active { opacity:.7; }
+
+  /* 日报弹层 */
+  #modal { position:absolute; inset:0; z-index:50; display:none; align-items:center; justify-content:center; background:rgba(8,6,4,.72); backdrop-filter:blur(8px); }
+  #modal.show { display:flex; }
+  #modalCard { width:84%; max-width:360px; background:linear-gradient(160deg,#2b2416,#1c1810); border:1px solid rgba(224,200,140,.3); border-radius:16px; padding:26px 24px 22px; color:#e6d6ac; box-shadow:0 18px 60px rgba(0,0,0,.6); animation:pop .4s cubic-bezier(.2,1.4,.4,1); }
+  @keyframes pop { 0%{transform:scale(.8); opacity:0} 100%{transform:scale(1); opacity:1} }
+  #modalCard h3 { font-size:16px; letter-spacing:3px; text-align:center; margin-bottom:4px; color:#f2e2b4; }
+  #modalCard .sub { text-align:center; font-size:11px; color:#9c8a64; margin-bottom:16px; }
+  .mrow { display:flex; justify-content:space-between; font-size:13px; padding:8px 4px; border-bottom:1px dashed rgba(224,200,140,.14); }
+  .mrow b { color:#f2e2b4; font-weight:600; }
+  #modalClose { display:block; margin:18px auto 0; padding:9px 34px; font-size:13px; letter-spacing:2px; color:#1c1810; background:linear-gradient(120deg,#e8cf90,#c9a95c); border:none; border-radius:99px; cursor:pointer; font-weight:700; }
+  #modalClose:active { transform:scale(.96); }
+
+  /* 提示 toast */
+  #toast { position:absolute; top:18%; left:50%; transform:translateX(-50%); z-index:60; background:rgba(20,16,8,.85); color:#f0dfae; font-size:13px; padding:9px 20px; border-radius:99px; border:1px solid rgba(224,200,140,.3); opacity:0; pointer-events:none; transition:opacity .3s; white-space:nowrap; }
+  #toast.show { opacity:1; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="bg"></div>
+
+  <div id="topbar">
+    <div id="title">做一天和尚撞一天钟<small id="hourLabel"></small></div>
+    <div id="stats">
+      <div class="stat"><div class="num" id="statGong">0</div><div class="lbl">功德</div></div>
+      <div class="stat"><div class="num" id="statDay">0</div><div class="lbl">连续打卡</div></div>
+    </div>
+  </div>
+
+  <div id="stage">
+    <div id="sceneCard">
+      <img id="sceneImg" src="img/scene-bell.jpg" alt="">
+      <div id="hitArea"></div>
+    </div>
+  </div>
+
+  <div id="quote"><span id="quoteText"></span></div>
+  <div id="gardenBar">
+    <button class="gbtn" id="waterBtn">浇水</button>
+    <button class="gbtn" id="harvestBtn">收菜</button>
+  </div>
+
+  <div id="nav">
+    <div class="navbtn" data-tab="bell"><div class="ico">🔔</div><div class="txt">撞钟</div></div>
+    <div class="navbtn" data-tab="muyu"><div class="ico">🪵</div><div class="txt">敲木鱼</div></div>
+    <div class="navbtn" data-tab="garden"><div class="ico">🥬</div><div class="txt">种菜</div></div>
+  </div>
+
+  <div id="modal">
+    <div id="modalCard">
+      <h3>今日晨报</h3>
+      <div class="sub" id="modalDate"></div>
+      <div id="modalBody"></div>
+      <button id="modalClose">开始修行</button>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+</div>
+
+<script>
+/* ============ 数据 ============ */
+const KEY = 'monk_day_v1';
+const today = new Date();
+const todayStr = today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
+
+let S = load();
+function load(){
+  try { const d = JSON.parse(localStorage.getItem(KEY)); if(d && d.lastDate) return d; } catch(e){}
+  return { gong:0, bell:0, muyu:0, shanyuan:0, lastDate:'', streak:0, garden:{state:'empty', watered:0} };
+}
+function save(){ localStorage.setItem(KEY, JSON.stringify(S)); }
+
+/* 每日首次打开：结算昨日 + 弹晨报 */
+(function dailyInit(){
+  if(S.lastDate !== todayStr){
+    const yest = new Date(today.getTime()-864e5);
+    const yStr = yest.getFullYear()+'-'+String(yest.getMonth()+1).padStart(2,'0')+'-'+String(yest.getDate()).padStart(2,'0');
+    S.streak = (S.lastDate === yStr) ? (S.streak||0)+1 : 1;
+    S.lastDate = todayStr;
+    S.bellToday = 0; S.muyuToday = 0;
+    save();
+    showMorning();
+  } else {
+    S.bellToday = S.bellToday||0; S.muyuToday = S.muyuToday||0;
+  }
+})();
+
+/* ============ 时段场景 ============ */
+const PHASES = [
+  { h:[5,9],   img:'scene-morning', name:'卯时 · 清晨山门' },
+  { h:[9,12],  img:'scene-garden',  name:'巳时 · 菜园劳作' },
+  { h:[12,14], img:'scene-pray',    name:'午时 · 大殿诵经' },
+  { h:[14,18], img:'scene-bell',    name:'未时 · 钟楼当值' },
+  { h:[18,21], img:'scene-dusk',    name:'酉时 · 黄昏静坐' },
+  { h:[21,29], img:'scene-dusk',    name:'亥时 · 夜灯未熄' },
+];
+function phaseNow(){
+  const h = today.getHours();
+  for(const p of PHASES){ if(h>=p.h[0] && h<p.h[1]) return p; }
+  return PHASES[0];
+}
+const phase = phaseNow();
+document.getElementById('bg').style.backgroundImage = 'url(img/'+phase.img+'.jpg)';
+document.getElementById('hourLabel').textContent = phase.name;
+
+/* ============ 音效（Web Audio 合成） ============ */
+let AC = null;
+function ac(){ if(!AC) AC = new (window.AudioContext||window.webkitAudioContext)(); return AC; }
+function bellSound(){
+  const c = ac(), t = c.currentTime;
+  [[329.6,.5],[659.2,.3],[987.7,.16],[1318.5,.09]].forEach(([f,g])=>{
+    const o = c.createOscillator(), v = c.createGain();
+    o.type='sine'; o.frequency.value = f*(1+(Math.random()-.5)*.008);
+    v.gain.setValueAtTime(g, t);
+    v.gain.exponentialRampToValueAtTime(.0001, t+3.4);
+    o.connect(v); v.connect(c.destination); o.start(t); o.stop(t+3.5);
+  });
+}
+function muyuSound(){
+  const c = ac(), t = c.currentTime;
+  const o = c.createOscillator(), v = c.createGain();
+  o.type='triangle'; o.frequency.setValueAtTime(820, t); o.frequency.exponentialRampToValueAtTime(180, t+.09);
+  v.gain.setValueAtTime(.5, t); v.gain.exponentialRampToValueAtTime(.0001, t+.14);
+  o.connect(v); v.connect(c.destination); o.start(t); o.stop(t+.16);
+  const o2 = c.createOscillator(), v2 = c.createGain();
+  o2.type='sine'; o2.frequency.value = 340;
+  v2.gain.setValueAtTime(.22, t); v2.gain.exponentialRampToValueAtTime(.0001, t+.1);
+  o2.connect(v2); v2.connect(c.destination); o2.start(t); o2.stop(t+.12);
+}
+
+/* ============ 文案池 ============ */
+const BELL_QUOTES = [
+  '钟声一响，黄金万两。精神上。',
+  '这一声，敲给周一的自己。',
+  '钟声悠远，KPI渐远。',
+  '你撞的不是钟，是生活的回音。',
+  '带薪敲钟，其乐无穷。',
+  '方丈说撞够108声就能下班，可和尚没有下班。',
+  '摸鱼一小时，修行一分钟。',
+  '这一声钟，超度了三个需求变更。',
+  '撞钟不积极，思想有问题——但思想没问题，所以不积极。',
+  '钟：今天又是我扛下所有。',
+  '这一响，为还在改稿的工友祈福。',
+  '声音越大，编制越稳。',
+];
+const MUYU_QUOTES = [
+  '笃。功德+1，怨气-1。',
+  '这一下是替老板敲的，祝他早日悟道。',
+  '敲的不是木鱼，是心平气和。',
+  '每敲一下，就有一个PPT妖怪被超度。',
+  '笃。已为您将"收到"转化为福报。',
+  '心平能愈三千疾，笃一下能回一半血。',
+  '这节奏，比甲方的心跳稳多了。',
+  '笃。今日份的情绪稳定，已充值。',
+];
+const GARDEN_QUOTES = {
+  water:'浇的是水，长的是随缘。',
+  growing:'菜在长，你在等，这就是修行。',
+  harvest:'收获善缘 ×3，今晚加菜。',
+};
+
+/* ============ 玩法切换 ============ */
+const TABS = {
+  bell:   { img:'img/scene-bell.jpg',   hit:{left:'12%',top:'8%',width:'46%',height:'74%'} },
+  muyu:   { img:'img/scene-pray.jpg',   hit:{left:'26%',top:'62%',width:'50%',height:'36%'} },
+  garden: { img:'img/scene-garden.jpg', hit:null },
+};
+let tab = 'bell';
+const hitArea = document.getElementById('hitArea');
+const sceneImg = document.getElementById('sceneImg');
+const gardenBar = document.getElementById('gardenBar');
+
+function setTab(t){
+  tab = t;
+  document.querySelectorAll('.navbtn').forEach(b=>b.classList.toggle('on', b.dataset.tab===t));
+  sceneImg.src = TABS[t].img;
+  gardenBar.style.display = (t==='garden') ? 'flex' : 'none';
+  if(TABS[t].hit){
+    Object.assign(hitArea.style, TABS[t].hit, {display:'block'});
+  } else {
+    hitArea.style.display = 'none';
+  }
+  refreshGarden();
+}
+document.querySelectorAll('.navbtn').forEach(b=>b.addEventListener('click', ()=>setTab(b.dataset.tab)));
+
+/* ============ 撞钟 ============ */
+function doBell(x, y){
+  ac(); bellSound();
+  S.bell++; S.bellToday++; S.gong += 10; save();
+  swing(); spawnFloat(x, y, '+10 功德'); ripple(x, y); updateStats();
+  say(pick(S.bellToday===1 ? ['第一声钟，一日之计在于撞。'].concat(BELL_QUOTES) : BELL_QUOTES));
+  if(S.bellToday === 108){ toast('今日撞钟108声，功德圆满 ✨'); S.gong += 88; save(); updateStats(); }
+}
+function swing(){
+  sceneImg.classList.remove('swing'); void sceneImg.offsetWidth;
+  sceneImg.classList.add('swing');
+}
+
+/* ============ 木鱼 ============ */
+function doMuyu(x, y){
+  ac(); muyuSound();
+  S.muyu++; S.muyuToday++; S.gong += 1; save();
+  sceneImg.classList.remove('thump'); void sceneImg.offsetWidth;
+  sceneImg.classList.add('thump');
+  spawnFloat(x, y, '+1'); updateStats();
+  if(Math.random()<.3) say(pick(MUYU_QUOTES));
+}
+
+/* ============ 菜园（轻放置） ============ */
+const GROW_TIME = 60; // 秒
+function refreshGarden(){
+  if(tab!=='garden') return;
+  const g = S.garden, w = document.getElementById('waterBtn'), h = document.getElementById('harvestBtn');
+  const age = g.watered ? (Date.now()-g.watered)/1000 : 0;
+  if(g.state==='growing' && age>=GROW_TIME){ g.state='ripe'; save(); }
+  w.disabled = (g.state!=='empty');
+  h.disabled = (g.state!=='ripe');
+  w.textContent = g.state==='growing' ? '生长中 '+Math.max(0,Math.ceil(GROW_TIME-age))+'s' : '浇水';
+  h.textContent = g.state==='ripe' ? '收菜 ✨' : '收菜';
+  if(g.state==='growing') setTimeout(refreshGarden, 500);
+}
+document.getElementById('waterBtn').addEventListener('click', ()=>{
+  if(S.garden.state!=='empty') return;
+  S.garden = {state:'growing', watered:Date.now()}; save();
+  say(GARDEN_QUOTES.water); toast('菜苗已种下'); refreshGarden();
+});
+document.getElementById('harvestBtn').addEventListener('click', ()=>{
+  if(S.garden.state!=='ripe') return;
+  S.garden = {state:'empty', watered:0};
+  S.shanyuan += 3; S.gong += 3; save();
+  say(GARDEN_QUOTES.harvest); toast('善缘 +3'); updateStats(); refreshGarden();
+});
+
+/* ============ 交互绑定 ============ */
+hitArea.addEventListener('pointerdown', e=>{
+  const r = document.getElementById('sceneCard').getBoundingClientRect();
+  const x = e.clientX-r.left, y = e.clientY-r.top;
+  if(tab==='bell') doBell(x, y);
+  else if(tab==='muyu') doMuyu(x, y);
+});
+
+/* ============ 表现层 ============ */
+function spawnFloat(x, y, text){
+  const d = document.createElement('div');
+  d.className='float'; d.textContent=text;
+  d.style.left=(x-20)+'px'; d.style.top=(y-14)+'px';
+  document.getElementById('sceneCard').appendChild(d);
+  setTimeout(()=>d.remove(), 1400);
+}
+function ripple(x, y){
+  const d = document.createElement('div');
+  d.className='ripple';
+  const s = 130;
+  d.style.cssText=`left:${x-s/2}px; top:${y-s/2}px; width:${s}px; height:${s}px;`;
+  document.getElementById('sceneCard').appendChild(d);
+  setTimeout(()=>d.remove(), 720);
+}
+let quoteTimer = null;
+function say(t){
+  const q = document.getElementById('quoteText');
+  q.textContent = t; q.classList.add('show');
+  clearTimeout(quoteTimer);
+  quoteTimer = setTimeout(()=>q.classList.remove('show'), 2800);
+}
+let toastTimer = null;
+function toast(t){
+  const el = document.getElementById('toast');
+  el.textContent = t; el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>el.classList.remove('show'), 2200);
+}
+function pick(a){ return a[Math.floor(Math.random()*a.length)]; }
+function updateStats(){
+  document.getElementById('statGong').textContent = S.gong;
+  document.getElementById('statDay').textContent = S.streak||0;
+}
+
+/* ============ 晨报 ============ */
+function titleOf(g){
+  if(g>=10800) return '斗战胜佛';
+  if(g>=5000)  return '方丈';
+  if(g>=2000)  return '住持';
+  if(g>=500)   return '比丘';
+  if(g>=100)   return '苦行僧';
+  return '小沙弥';
+}
+function showMorning(){
+  document.getElementById('modalDate').textContent = todayStr + ' · ' + phase.name;
+  document.getElementById('modalBody').innerHTML = [
+    ['昨日累计功德', S.gong],
+    ['当前修行称号', titleOf(S.gong)],
+    ['连续打卡', (S.streak||1)+' 天'],
+    ['今日宜', pick(['撞钟','敲鱼','种菜','发呆','早睡'])],
+    ['今日忌', pick(['内耗','已读乱回','开周会','改需求'])],
+  ].map(([k,v])=>'<div class="mrow"><span>'+k+'</span><b>'+v+'</b></div>').join('');
+  document.getElementById('modal').classList.add('show');
+}
+document.getElementById('modalClose').addEventListener('click', ()=>{
+  document.getElementById('modal').classList.remove('show');
+});
+
+/* ============ 启动 ============ */
+updateStats();
+setTab('bell');
+</script>
+</body>
+</html>
