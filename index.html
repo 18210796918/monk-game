@@ -34,11 +34,11 @@
   #hitArea:active { filter:brightness(1.12); }
 
   /* 钟摆动效 */
-  .swing { animation:swing .55s ease-out; transform-origin:50% 0; }
+  #sceneCard #sceneImg.swing { animation:swing .55s ease-out; transform-origin:50% 0; }
   @keyframes swing { 0%{transform:rotate(0)} 18%{transform:rotate(5deg)} 45%{transform:rotate(-3.4deg)} 70%{transform:rotate(1.6deg)} 100%{transform:rotate(0)} }
 
   /* 木鱼缩放 */
-  .thump { animation:thump .18s ease-out; }
+  #sceneCard #sceneImg.thump { animation:thump .18s ease-out; }
   @keyframes thump { 0%{transform:scale(1)} 40%{transform:scale(.94)} 100%{transform:scale(1)} }
 
   /* 飘字 */
@@ -84,11 +84,55 @@
   /* 提示 toast */
   #toast { position:absolute; top:18%; left:50%; transform:translateX(-50%); z-index:60; background:rgba(20,16,8,.85); color:#f0dfae; font-size:13px; padding:9px 20px; border-radius:99px; border:1px solid rgba(224,200,140,.3); opacity:0; pointer-events:none; transition:opacity .3s; white-space:nowrap; }
   #toast.show { opacity:1; }
+
+  /* ============ 环境动效层 ============ */
+  /* 背景缓慢推移 Ken Burns */
+  #bg { animation:bgDrift 36s ease-in-out infinite alternate; }
+  @keyframes bgDrift { 0%{transform:scale(1.15) translate(0,0)} 50%{transform:scale(1.19) translate(-8px,5px)} 100%{transform:scale(1.15) translate(7px,-4px)} }
+
+  /* 呼吸光晕：场景卡后方的暖色光，缓慢涨落 */
+  #glow { position:absolute; left:50%; top:44%; width:130%; aspect-ratio:1; transform:translate(-50%,-50%); z-index:5; pointer-events:none;
+    background:radial-gradient(circle, rgba(255,205,120,.20) 0%, rgba(255,180,90,.08) 38%, transparent 65%);
+    animation:glowBreath 5.5s ease-in-out infinite; }
+  @keyframes glowBreath { 0%,100%{opacity:.55; transform:translate(-50%,-50%) scale(1)} 50%{opacity:1; transform:translate(-50%,-50%) scale(1.12)} }
+
+  /* 微尘粒子画布 */
+  #fx { position:absolute; inset:0; z-index:8; pointer-events:none; }
+
+  /* 场景卡整体呼吸 */
+  #sceneCard { animation:cardBreath 7s ease-in-out infinite; }
+  @keyframes cardBreath { 0%,100%{transform:scale(1)} 50%{transform:scale(1.006)} }
+
+  /* 钟穗 idle 微摆：无点击时也轻轻晃 */
+  #sceneImg { transform-origin:50% 0; }
+  #sceneCard.idle-bell #sceneImg { animation:idleSway 4.6s ease-in-out infinite; }
+  @keyframes idleSway { 0%,100%{transform:rotate(0deg)} 30%{transform:rotate(.7deg)} 65%{transform:rotate(-.5deg)} }
+
+  /* 木鱼 idle 微光 */
+  #sceneCard.idle-muyu #sceneImg { animation:idleGlowP 4s ease-in-out infinite; }
+  @keyframes idleGlowP { 0%,100%{filter:brightness(1)} 50%{filter:brightness(1.07)} }
+
+  /* 菜园 idle 微风 */
+  #sceneCard.idle-garden #sceneImg { animation:idleSway 6.5s ease-in-out infinite; transform-origin:50% 100%; }
+
+  /* 点击引导脉冲圈 */
+  #hitPulse { position:absolute; left:50%; top:50%; width:92px; height:92px; margin:-46px 0 0 -46px; border-radius:50%; border:2px solid rgba(255,225,150,.75); pointer-events:none; opacity:0; z-index:12; }
+  #hitPulse.play { animation:hitPulse 1.6s ease-out 3; }
+  @keyframes hitPulse { 0%{opacity:.9; transform:scale(.45)} 100%{opacity:0; transform:scale(1.5)} }
+
+  /* 功德数字跳动 */
+  .stat .num.pop { animation:numPop .4s ease-out; }
+  @keyframes numPop { 0%{transform:scale(1)} 40%{transform:scale(1.35); color:#ffe9a8} 100%{transform:scale(1)} }
+
+  /* 开场 auto 钟声的飘字更大号 */
+  .float.big { font-size:19px; letter-spacing:2px; }
 </style>
 </head>
 <body>
 <div id="app">
   <div id="bg"></div>
+  <div id="glow"></div>
+  <canvas id="fx"></canvas>
 
   <div id="topbar">
     <div id="title">做一天和尚撞一天钟<small id="hourLabel"></small></div>
@@ -101,7 +145,7 @@
   <div id="stage">
     <div id="sceneCard">
       <img id="sceneImg" src="img/scene-bell.jpg" alt="">
-      <div id="hitArea"></div>
+      <div id="hitArea"><div id="hitPulse"></div></div>
     </div>
   </div>
 
@@ -252,6 +296,15 @@ function setTab(t){
   } else {
     hitArea.style.display = 'none';
   }
+  /* idle 微动效跟随 tab */
+  const card = document.getElementById('sceneCard');
+  card.classList.remove('idle-bell','idle-muyu','idle-garden');
+  void card.offsetWidth;
+  card.classList.add('idle-'+(t==='garden'?'garden':t));
+  /* 引导脉冲：切 tab 时播一轮 */
+  const hp = document.getElementById('hitPulse');
+  hp.classList.remove('play'); void hp.offsetWidth;
+  if(TABS[t].hit) hp.classList.add('play');
   refreshGarden();
 }
 document.querySelectorAll('.navbtn').forEach(b=>b.addEventListener('click', ()=>setTab(b.dataset.tab)));
@@ -267,6 +320,7 @@ function doBell(x, y){
 function swing(){
   sceneImg.classList.remove('swing'); void sceneImg.offsetWidth;
   sceneImg.classList.add('swing');
+  setTimeout(()=>sceneImg.classList.remove('swing'), 600);
 }
 
 /* ============ 木鱼 ============ */
@@ -275,6 +329,7 @@ function doMuyu(x, y){
   S.muyu++; S.muyuToday++; S.gong += 1; save();
   sceneImg.classList.remove('thump'); void sceneImg.offsetWidth;
   sceneImg.classList.add('thump');
+  setTimeout(()=>sceneImg.classList.remove('thump'), 260);
   spawnFloat(x, y, '+1'); updateStats();
   if(Math.random()<.3) say(pick(MUYU_QUOTES));
 }
@@ -313,9 +368,9 @@ hitArea.addEventListener('pointerdown', e=>{
 });
 
 /* ============ 表现层 ============ */
-function spawnFloat(x, y, text){
+function spawnFloat(x, y, text, big){
   const d = document.createElement('div');
-  d.className='float'; d.textContent=text;
+  d.className='float'+(big?' big':''); d.textContent=text;
   d.style.left=(x-20)+'px'; d.style.top=(y-14)+'px';
   document.getElementById('sceneCard').appendChild(d);
   setTimeout(()=>d.remove(), 1400);
@@ -346,6 +401,8 @@ function pick(a){ return a[Math.floor(Math.random()*a.length)]; }
 function updateStats(){
   document.getElementById('statGong').textContent = S.gong;
   document.getElementById('statDay').textContent = S.streak||0;
+  const n = document.getElementById('statGong');
+  n.classList.remove('pop'); void n.offsetWidth; n.classList.add('pop');
 }
 
 /* ============ 晨报 ============ */
@@ -370,11 +427,80 @@ function showMorning(){
 }
 document.getElementById('modalClose').addEventListener('click', ()=>{
   document.getElementById('modal').classList.remove('show');
+  openingRitual();
 });
+
+/* ============ 开场仪式：页面自己先撞一次钟（无声，浏览器拦截自动播放） ============ */
+let ritualDone = false;
+function openingRitual(){
+  if(ritualDone) return; ritualDone = true;
+  setTimeout(()=>{
+    const card = document.getElementById('sceneCard');
+    const x = card.clientWidth*.36, y = card.clientHeight*.42;
+    swing(); spawnFloat(x, y, '今日第一声', true); ripple(x, y);
+    say('钟已备好，点它。');
+    /* 重播引导脉冲（晨报期间播的那轮被弹层盖住了） */
+    const hp = document.getElementById('hitPulse');
+    hp.classList.remove('play'); void hp.offsetWidth; hp.classList.add('play');
+  }, 450);
+}
+
+/* ============ 微尘粒子：金色禅意浮尘，持续漂浮 ============ */
+(function dust(){
+  const cv = document.getElementById('fx'), ctx = cv.getContext('2d');
+  let W, H, parts = [];
+  const DPR = Math.min(window.devicePixelRatio||1, 2);
+  function resize(){
+    const app = document.getElementById('app');
+    W = app.clientWidth; H = app.clientHeight;
+    cv.width = W*DPR; cv.height = H*DPR;
+    cv.style.width = W+'px'; cv.style.height = H+'px';
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    const n = Math.min(34, Math.floor(W*H/26000));
+    parts = Array.from({length:n}, ()=>spawn(true));
+  }
+  function spawn(anyY){
+    return {
+      x: Math.random()*W,
+      y: anyY ? Math.random()*H : H + 10,
+      r: .8 + Math.random()*1.9,
+      vy: .12 + Math.random()*.3,
+      amp: 8 + Math.random()*22,
+      ph: Math.random()*Math.PI*2,
+      sp: .0006 + Math.random()*.0012,
+      tw: .5 + Math.random()*1.4,
+      a: .12 + Math.random()*.3
+    };
+  }
+  let t0 = performance.now();
+  function frame(now){
+    const t = now - t0;
+    ctx.clearRect(0,0,W,H);
+    for(let i=0;i<parts.length;i++){
+      const p = parts[i];
+      p.y -= p.vy;
+      const x = p.x + Math.sin(t*p.sp + p.ph)*p.amp;
+      const alpha = p.a * (0.55 + 0.45*Math.sin(t*.002*p.tw + p.ph));
+      ctx.beginPath();
+      ctx.arc(x, p.y, p.r, 0, 6.2832);
+      ctx.fillStyle = 'rgba(240,218,150,'+alpha.toFixed(3)+')';
+      ctx.fill();
+      if(p.y < -12) parts[i] = spawn(false);
+    }
+    requestAnimationFrame(frame);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+  requestAnimationFrame(frame);
+})();
 
 /* ============ 启动 ============ */
 updateStats();
 setTab('bell');
+/* 今天已打卡过（无晨报弹层）：直接开场仪式 */
+if(!document.getElementById('modal').classList.contains('show')){
+  setTimeout(openingRitual, 900);
+}
 </script>
 </body>
 </html>
